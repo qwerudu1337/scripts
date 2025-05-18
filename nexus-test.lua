@@ -142,6 +142,14 @@ do -- Nexus
     Nexus.ShutdownTime = 45
     Nexus.ShutdownOnTeleportError = true
 
+    function Nexus:AddCommand(Name, Function)
+        self.Commands[Name] = Function
+    end
+
+    function Nexus:RemoveCommand(Name)
+        self.Commands[Name] = nil
+    end
+
     function Nexus:Send(Command, Payload)
         if not self.Socket or not self.IsConnected then return end
         local success, message = pcall(function()
@@ -362,11 +370,15 @@ end)
 Nexus:AddCommand("RebootRequest", function(payload)
     local data = game:GetService("HttpService"):JSONDecode(payload)
     
-    -- Логика для вашего Account Manager:
-    -- 1. Закрыть текущий экземпляр Roblox
-    -- 2. Перезапустить аккаунт с теми же параметрами
-    -- 3. Ввести задержку перед повторным подключением
+    -- Логика для вашего Account Manager
+    Nexus:Log("Инициирован перезапуск аккаунта...")
     
+    task.delay(data.Delay or 30, function()
+        if not game:IsLoaded() then
+            game:Shutdown()
+        end
+    end)
+end)
     Nexus:Log("Инициирован перезапуск аккаунта...")
     
     -- Пример реализации:
