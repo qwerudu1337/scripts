@@ -1,604 +1,120 @@
-local MAX_RESTART_ATTEMPTS = 5 -- Максимальное количество попыток перезапуска
-local RESTART_DELAY = 15 -- Задержка между перезапусками в секундах
+local MAX_RESTARTS = 3 -- Максимальное количество перезапусков
+local RESTART_DELAY = 20 -- Задержка между перезапусками в секундах
 
-if Nexus then Nexus:Stop() end
+-- Глобальные переменные состояния
+getgenv().RestartData = {
+    Attempts = 0,
+    LastRestart = 0,
+    IsRestarting = false
+}
 
--- Добавляем глобальную переменную для отслеживания перезапусков
-getgenv().RestartCounter = getgenv().RestartCounter or 0
-
-local function SafeShutdown()
-    if not getgenv().NoShutdown then
-        game:Shutdown()
-    end
-end
-
--- Модифицированная проверка загрузки игры
-if not game:IsLoaded() then
-    task.delay(60, function()
-        if getgenv().NoShutdown then return end
-
-        if not game:IsLoaded() then
-            getgenv().RestartCounter = getgenv().RestartCounter + 1
-            return SafeShutdown()
-        end
-
-        local Code = game:GetService'GuiService':GetErrorCode().Value
-        if Code >= Enum.ConnectionError.DisconnectErrors.Value then
-            getgenv().RestartCounter = getgenv().RestartCounter + 1
-            return SafeShutdown()
-        end
-    end)
+-- Основная функция перезапуска
+local function ScheduleRestart()
+    if getgenv().RestartData.IsRestarting then return end
+    getgenv().RestartData.IsRestarting = true
     
-    game.Loaded:Wait()
-end
-
-local Nexus = {}
-local WSConnect = syn and syn.websocket.connect or
-    (Krnl and (function() repeat task.wait() until Krnl.WebSocket and Krnl.WebSocket.connect return Krnl.WebSocket.connect end)()) or
-    WebSocket and WebSocket.connect
-
-if not WSConnect then
-    if messagebox then
-        messagebox(('Nexus encountered an error while launching!\n\n%s'):format('Your exploit (' .. (identifyexecutor and identifyexecutor() or 'UNKNOWN') .. ') is not supported'), 'Roblox Account Manager', 0)
-    end
-    
-    return
-end
-
-local TeleportService = game:GetService'TeleportService'
-local InputService = game:GetService'UserInputService'
-local HttpService = game:GetService'HttpService'
-local RunService = game:GetService'RunService'
-local GuiService = game:GetService'GuiService'
-local Players = game:GetService'Players'
-local LocalPlayer = Players.LocalPlayer if not LocalPlayer then repeat LocalPlayer = Players.LocalPlayer task.wait() until LocalPlayer end task.wait(0.5)
-
-local UGS = UserSettings():GetService'UserGameSettings'
-local OldVolume = UGS.MasterVolume
-
-LocalPlayer.OnTeleport:Connect(function(State)
-    if State == Enum.TeleportState.Started and Nexus.IsConnected then
-        Nexus:Stop() -- Apparently doesn't disconnect websockets on teleport so this has to be here
-    end
-end)
-
-local Signal = {} do
-    Signal.__index = Signal
-
-    function Signal.new()
-        local self = setmetatable({ _BindableEvent = Instance.new'BindableEvent' }, Signal)
-        
-        return self
-    end
-
-    function Signal:Connect(Callback)
-        assert(typeof(Callback) == 'function', 'function expected, got ' .. typeof(Callback))
-
-        return self._BindableEvent.Event:Connect(Callback)
-    end
-
-    function Signal:Fire(...)
-        self._BindableEvent:Fire(...)
-    end
-
-    function Signal:Wait()
-        return self._BindableEvent.Event:Wait()
-    end
-
-    function Signal:Disconnect()
-        if self._BindableEvent then
-            self._BindableEvent:Destroy()
-        end
-    end
-end
-
-do -- Nexus
-    local BTN_CLICK = 'ButtonClicked:'
-
-    Nexus.Connected = Signal.new()
-    Nexus.Disconnected = Signal.new()
-    Nexus.MessageReceived = Signal.new()
-
-    Nexus.Commands = {}
-    Nexus.Connections = {}
-
-    Nexus.ShutdownTime = 45
-    Nexus.ShutdownOnTeleportError = true
-
-    function Nexus:Send(Command, Payload)
-        assert(self.Socket ~= nil, 'websocket is nil')
-        assert(self.IsConnected, 'websocket not connected')
-        assert(typeof(Command) == 'string', 'Command must be a string, got ' .. typeof(Command))
-
-        if Payload then
-            assert(typeof(Payload) == 'table', 'Payload must be a table, got ' .. typeof(Payload))
-        end
-
-        local Message = HttpService:JSONEncode {
-            Name = Command,
-            Payload = Payload
-        }
-
-        self.Socket:Send(Message)
-    end
-
-    function Nexus:SetAutoRelaunch(Enabled)
-        self:Send('SetAutoRelaunch', { Content = Enabled and 'true' or 'false' })
-    end
-    
-    function Nexus:SetPlaceId(PlaceId)
-        self:Send('SetPlaceId', { Content = PlaceId })
-    end
-    
-    function Nexus:SetJobId(JobId)
-        self:Send('SetJobId', { Content = JobId })
-    end
-
-    function Nexus:Echo(Message)
-        self:Send('Echo', { Content = Message })
-    end
-
-    function Nexus:Log(...)
-        local T = {}
-
-        for Index, Value in pairs{ ... } do
-            table.insert(T, tostring(Value))
-        end
-
-        self:Send('Log', {
-            Content = table.concat(T, ' ')
-        })
-    end
-
-    function Nexus:CreateElement(ElementType, Name, Content, Size, Margins, Table)
-        assert(typeof(Name) == 'string', 'string expected on argument #1, got ' .. typeof(Name))
-        assert(typeof(Content) == 'string', 'string expected on argument #2, got ' .. typeof(Content))
-
-        assert(Name:find'%W' == nil, 'argument #1 cannot contain whitespace')
-
-        if Size then assert(typeof(Size) == 'table' and #Size == 2, 'table with 2 arguments expected on argument #3, got ' .. typeof(Size)) end
-        if Margins then assert(typeof(Margins) == 'table' and #Margins == 4, 'table with 4 arguments expected on argument #4, got ' .. typeof(Margins)) end
-        
-        local Payload = {
-            Name = Name,
-            Content = Content,
-            Size = Size and table.concat(Size, ','),
-            Margin = Margins and table.concat(Margins, ',')
-        }
-
-        if Table then
-            for Index, Value in pairs(Table) do
-                Payload[Index] = Value
-            end
-        end
-
-        self:Send(ElementType, Payload)
-    end
-
-    function Nexus:CreateButton(...)
-        return self:CreateElement('CreateButton', ...)
-    end
-
-    function Nexus:CreateTextBox(...)
-        return self:CreateElement('CreateTextBox', ...)
-    end
-
-    function Nexus:CreateNumeric(Name, Value, DecimalPlaces, Increment, Size, Margins)
-        return self:CreateElement('CreateNumeric', Name, tostring(Value), Size, Margins, { DecimalPlaces = DecimalPlaces, Increment = Increment })
-    end
-
-    function Nexus:CreateLabel(...)
-        return self:CreateElement('CreateLabel', ...)
-    end
-
-    function Nexus:NewLine(...)
-        return self:Send('NewLine')
-    end
-
-    function Nexus:GetText(Name)
-        return self:WaitForMessage('ElementText:', 'GetText', { Name = Name })
-    end
-
-    function Nexus:SetRelaunch(Seconds)
-        self:Send('SetRelaunch', { Seconds = Seconds })
-    end
-
-    function Nexus:WaitForMessage(Header, Message, Payload)
-        if Message then
-            task.defer(self.Send, self, Message, Payload)
-        end
-
-        local Message
-
-        while true do
-            Message = self.MessageReceived:Wait()
-
-            if Message:sub(1, #Header) == Header then
-                break
-            end
-        end
-
-        return Message:sub(#Header + 1)
-    end
-
-    function Nexus:Connect(Host, Bypass)
-        if not Bypass and self.IsConnected then return 'Ignoring connection request, Nexus is already connected' end
-
-        while true do
-            for Index, Connection in pairs(self.Connections) do
-                Connection:Disconnect()
-            end
-        
-            table.clear(self.Connections)
-
-            if self.IsConnected then
-                self.IsConnected = false
-                self.Socket = nil
-                self.Disconnected:Fire()
-            end
-
-            if self.Terminated then break end
-
-            if not Host then
-                Host = 'localhost:5242'
-            end
-
-            local Success, Socket = pcall(WSConnect, ('ws://%s/Nexus?name=%s&id=%s&jobId=%s'):format(Host, LocalPlayer.Name, LocalPlayer.UserId, game.JobId))
-
-            if not Success then task.wait(12) continue end
-
-            self.Socket = Socket
-            self.IsConnected = true
-
-            table.insert(self.Connections, Socket.OnMessage:Connect(function(Message)
-                self.MessageReceived:Fire(Message)
-            end))
-
-            table.insert(self.Connections, Socket.OnClose:Connect(function()
-                self.IsConnected = false
-                self.Disconnected:Fire()
-            end))
-
-            self.Connected:Fire()
-
-            while self.IsConnected do
-                local Success, Error = pcall(self.Send, self, 'ping')
-
-                if not Success or self.Terminated then
-                    break
-                end
-
-                task.wait(1)
-            end
-        end
-    end
-
-    function Nexus:Stop()
-        self.IsConnected = false
-        self.Terminated = true
-        self.Disconnected:Fire()
-
-        if self.Socket then
-            pcall(function() self.Socket:Close() end)
-        end
-    end
-
-    function Nexus:AddCommand(Name, Function)
-        self.Commands[Name] = Function
-    end
-
-    function Nexus:RemoveCommand(Name)
-        self.Commands[Name] = nil
-    end
-
-    function Nexus:OnButtonClick(Name, Function)
-        self:AddCommand('ButtonClicked:' .. Name, Function)
-    end
-
-    Nexus.MessageReceived:Connect(function(Message)
-        local S = Message:find(' ')
-
-        if S then
-            local Command, Message = Message:sub(1, S - 1):lower(), Message:sub(S + 1)
-
-            if Nexus.Commands[Command] then
-                local Success, Error = pcall(Nexus.Commands[Command], Message)
-
-                if not Success and Error then
-                    Nexus:Log(('Error with command `%s`: %s'):format(Command, Error))
-                end
-            end
-        elseif Nexus.Commands[Message] then
-            local Success, Error = pcall(Nexus.Commands[Message], Message)
-
-            if not Success and Error then
-                Nexus:Log(('Error with command `%s`: %s'):format(Message, Error))
-            end
-        end
-    end)
-end
-
-do -- Default Commands
-    Nexus:AddCommand('execute', function(Message)
-        local Function, Error = loadstring(Message)
-        
-        if Function then
-            local Env = getfenv(Function)
-            
-            Env.Player = LocalPlayer
-            Env.print = function(...)
-                local T = {}
-
-                for Index, Value in pairs{ ... } do
-                    table.insert(T, tostring(Value))
-                end
-
-                Nexus:Log(table.concat(T, ' '))
-            end
-
-            if newcclosure then Env.print = newcclosure(Env.print) end
-
-            local S, E = pcall(Function)
-
-            if not S then
-                Nexus:Log(E)
-            end
-        else
-            Nexus:Log(Error)
-        end
-    end)
-
-    Nexus:AddCommand('teleport', function(Message)
-        local S = Message:find(' ')
-        local PlaceId, JobId = S and Message:sub(1, S - 1) or Message, S and Message:sub(S + 1)
-        
-        if JobId then
-            TeleportService:TeleportToPlaceInstance(tonumber(PlaceId), JobId)
-        else
-            TeleportService:Teleport(tonumber(PlaceId))
-        end
-    end)
-
-    Nexus:AddCommand('rejoin', function(Message)
-        TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId)
-    end)
-
-    Nexus:AddCommand('mute', function()
-        if (UGS.MasterVolume - OldVolume) > 0.01 then
-            OldVolume = UGS.MasterVolume
-        end
-
-        UGS.MasterVolume = 0
-    end)
-
-    Nexus:AddCommand('unmute', function()
-        UGS.MasterVolume = OldVolume
-    end)
-
-    Nexus:AddCommand('performance', function(Message)
-        if _PERF then return end
-        
-        _PERF = true
-        _TARGETFPS = 8
-
-        if Message and tonumber(Message) then
-            _TARGETFPS = tonumber(Message)
-        end
-
-        local OldLevel = settings().Rendering.QualityLevel
-
-        RunService:Set3dRenderingEnabled(false)
-        settings().Rendering.QualityLevel = 1
-
-        InputService.WindowFocused:Connect(function()
-            RunService:Set3dRenderingEnabled(true)
-            settings().Rendering.QualityLevel = OldLevel
-            setfpscap(60)
-        end)
-
-        InputService.WindowFocusReleased:Connect(function()
-            OldLevel = settings().Rendering.QualityLevel
-
-            RunService:Set3dRenderingEnabled(false)
-            settings().Rendering.QualityLevel = 1
-            setfpscap(_TARGETFPS)
-        end)
-
-        setfpscap(_TARGETFPS)
-    end)
-end
-
-do -- Connections
-    GuiService.ErrorMessageChanged:Connect(function()
-        if getgenv().NoShutdown then return end
-
-        local Code = GuiService:GetErrorCode().Value
-        if Code >= Enum.ConnectionError.DisconnectErrors.Value then
-            if not Nexus.ShutdownOnTeleportError and Code > Enum.ConnectionError.PlacelaunchOtherError.Value then
-                return
-            end
-            
-            getgenv().RestartCounter = getgenv().RestartCounter + 1
-            task.delay(Nexus.ShutdownTime, SafeShutdown)
-        end
-    end)
-end
-
--- Новый функционал для автоматического перезапуска
-local function HandleRestart()
-    if getgenv().RestartCounter >= MAX_RESTART_ATTEMPTS then
-        Nexus:Log("Достигнуто максимальное количество попыток перезапуска!")
+    -- Проверка максимального количества попыток
+    if getgenv().RestartData.Attempts >= MAX_RESTARTS then
+        Nexus:Log("Достигнут лимит перезапусков!")
         return
     end
 
-    -- Отправляем команду в Account Manager через WebSocket
-    Nexus:Send("ScheduleRestart", {
-        Delay = RESTART_DELAY,
+    -- Увеличиваем счетчик и обновляем время
+    getgenv().RestartData.Attempts += 1
+    getgenv().RestartData.LastRestart = os.time()
+    
+    -- Отправка команды в Account Manager
+    Nexus:Send("RestartRequest", {
+        PlaceId = game.PlaceId,
         JobId = game.JobId,
-        PlaceId = game.PlaceId
+        Attempt = getgenv().RestartData.Attempts
     })
 
-    -- Создаем кнопку для ручного перезапуска
-    Nexus:CreateButton("RestartButton", "Перезапустить сейчас", {200, 40}, {5,5,5,5})
-    Nexus:OnButtonClick("RestartButton", function()
-        getgenv().RestartCounter = 0
-        SafeShutdown()
+    -- Создание UI элементов
+    Nexus:CreateLabel("RestartInfo", 
+        string.format("Перезапуск через %d сек...", RESTART_DELAY), 
+        {200, 40}, {5,5,5,5}
+    )
+    
+    Nexus:CreateButton("ForceRestart", "Перезапустить сейчас", {150, 30}, {5,5,5,5})
+    
+    -- Обработчик кнопки
+    Nexus:OnButtonClick("ForceRestart", function()
+        game:Shutdown()
     end)
-end
 
--- Автоматический перезапуск при критических ошибках
-game:GetService("CoreGui").ChildRemoved:Connect(function(child)
-    if child.Name == "RobloxGui" then
-        HandleRestart()
-    end
-end)
-
--- Инициализация перезапуска
-task.spawn(function()
-    while true do
-        Nexus:WaitForMessage("RestartConfirmed")
-        HandleRestart()
-        task.wait(RESTART_DELAY)
-    end
-end)
-
--- Остальная часть оригинального скрипта
-local GEnv = getgenv()
-GEnv.Nexus = Nexus
-GEnv.performance = Nexus.Commands.performance -- fix the sirmeme error so that people stop being annoying saying "omg performance() doesnt work" (https://youtu.be/vVfg9ym2MNs?t=389)
-
-if not Nexus_Version then
-    Nexus:Connect()
-end
-
--- Добавляем второй порт для информационного канала
-local INFO_PORT = 5252
-local infoSocket = nil
-local infoConnected = false
-
-if not game:IsLoaded() then
-    task.delay(60, function()
-        if NoShutdown then return end
-        if not game:IsLoaded() then return game:Shutdown() end
-        
-        local Code = game:GetService'GuiService':GetErrorCode().Value
-        if Code >= Enum.ConnectionError.DisconnectErrors.Value then
-            return game:Shutdown()
+    -- Автоматический перезапуск
+    task.delay(RESTART_DELAY, function()
+        if getgenv().RestartData.IsRestarting then
+            game:Shutdown()
         end
     end)
-    game.Loaded:Wait()
 end
 
-local Nexus = {}
-local WSConnect = syn and syn.websocket.connect or
-    (Krnl and (function() repeat until Krnl.WebSocket and Krnl.WebSocket.connect return Krnl.WebSocket.connect end)()) or
-    WebSocket.connect
-
-if not WSConnect then
-    if messagebox then
-        messagebox(('Nexus Error!\n%s'):format('Unsupported exploit: '..(identifyexecutor() or 'UNKNOWN')), 'RAM', 0)
+-- Хук на закрытие интерфейса
+game:GetService("CoreGui").ChildRemoved:Connect(function(child)
+    if child.Name == "RobloxGui" and not getgenv().RestartData.IsRestarting then
+        ScheduleRestart()
     end
-    return
-end
-
--- Сервисы
-local HttpService = game:GetService'HttpService'
-local Players = game:GetService'Players'
-local LocalPlayer = Players.LocalPlayer
-repeat task.wait() until LocalPlayer
-
--- Инициализация информационного канала
-local function InitInfoChannel()
-    local success, socket = pcall(WSConnect, 'ws://localhost:'..tostring(INFO_PORT))
-    if success then
-        infoSocket = socket
-        infoConnected = true
-        infoSocket.OnMessage:Connect(function(msg)
-            -- Обработка сообщений для веб-интерфейса
-            print('[INFO CHANNEL]', msg)
-        end)
-        infoSocket.OnClose:Wait()
-        infoConnected = false
-    end
-end
-
-task.spawn(InitInfoChannel)
-
--- Модифицированные функции Nexus
-function Nexus:SendInfo(...)
-    if not infoConnected then return end
-    local args = {...}
-    local message = HttpService:JSONEncode({
-        Type = 'InfoUpdate',
-        Data = table.concat(args, ' ')
-    })
-    infoSocket:Send(message)
-end
-
-function Nexus:UpdateWebUI(message)
-    self:SendInfo('WEB_UI_UPDATE', message)
-end
-
--- Оригинальные функции Nexus с интеграцией информационного канала
-do
-    local BTN_CLICK = 'ButtonClicked:'
-    Nexus.Connected = Signal.new()
-    Nexus.Disconnected = Signal.new()
-    Nexus.MessageReceived = Signal.new()
-    
-    Nexus.Commands = {}
-    Nexus.Connections = {}
-
-    function Nexus:Log(...)
-        local T = {}
-        for _,v in ipairs{...} do table.insert(T, tostring(v)) end
-        self:Send('Log', {Content = table.concat(T, ' ')})
-        self:SendInfo('LOG', table.concat(T, ' ')) -- Отправка в веб-интерфейс
-    end
-
-    function Nexus:Connect(Host)
-        task.spawn(function()
-            while true do
-                if self.IsConnected then
-                    for _,c in pairs(self.Connections) do c:Disconnect() end
-                    self.IsConnected = false
-                    self.Socket = nil
-                end
-
-                Host = Host or 'localhost:5242'
-                local success, sock = pcall(WSConnect, ('ws://%s/Nexus?user=%s&id=%s'):format(
-                    Host, LocalPlayer.Name, LocalPlayer.UserId))
-
-                if success then
-                    self.Socket = sock
-                    self.IsConnected = true
-                    
-                    self.Connections = {
-                        sock.OnMessage:Connect(function(msg)
-                            self.MessageReceived:Fire(msg)
-                            self:SendInfo('WS_MSG', msg) -- Пересылка сообщений
-                        end),
-                        sock.OnClose:Connect(function()
-                            self.IsConnected = false
-                            self.Disconnected:Fire()
-                        end)
-                    }
-                    
-                    self.Connected:Fire()
-                    while self.IsConnected do
-                        pcall(self.Send, self, 'ping')
-                        task.wait(1)
-                    end
-                else
-                    task.wait(12)
-                end
-            end
-        end)
-    end
-end
-
--- Интеграция с веб-интерфейсом
-Nexus:AddCommand('webui', function(msg)
-    Nexus:UpdateWebUI(msg)
-    print('[WEB UI]', msg)
 end)
+
+-- Модифицированная проверка загрузки
+if not game:IsLoaded() then
+    local loaded = false
+    
+    task.delay(60, function()
+        if loaded or getgenv().NoShutdown then return end
+        
+        if not game:IsLoaded() then
+            ScheduleRestart()
+        end
+        
+        local errorCode = game:GetService("GuiService"):GetErrorCode().Value
+        if errorCode >= Enum.ConnectionError.DisconnectErrors.Value then
+            ScheduleRestart()
+        end
+    end)
+    
+    game.Loaded:Wait()
+    loaded = true
+end
+
+-- Интеграция с Nexus WebSocket
+do
+    local function HandleRestartCommand(payload)
+        local data = HttpService:JSONDecode(payload)
+        
+        if data.Command == "ForceRestart" then
+            game:Shutdown()
+        elseif data.Command == "ScheduleRestart" then
+            ScheduleRestart()
+        end
+    end
+
+    Nexus:AddCommand("restart", HandleRestartCommand)
+    Nexus:AddCommand("force_restart", HandleRestartCommand)
+end
+
+-- Дополнительные хуки
+game:GetService("Players").PlayerRemoving:Connect(function(player)
+    if player == LocalPlayer then
+        ScheduleRestart()
+    end
+end)
+
+LocalPlayer.OnTeleport:Connect(function(state)
+    if state == Enum.TeleportState.Failed then
+        ScheduleRestart()
+    end
+end)
+
+-- Инициализация Nexus
+if not Nexus_Version then
+    Nexus:Connect("localhost:5242", true)
+    
+    Nexus:SetAutoRelaunch(true)
+    Nexus:SetPlaceId(game.PlaceId)
+    Nexus:SetJobId(game.JobId)
+    
+    Nexus:Log("Система автоперезапуска активирована!")
+end
