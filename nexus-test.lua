@@ -276,3 +276,103 @@ if not Nexus_Version then
         end
     end)
 end
+
+-- Добавьте этот код в конец вашего скрипта Nexus.lua
+-- Автоматическая система перезапуска
+
+local AUTO_REBOOT = {
+    Enabled = true,             -- Включить авто-перезапуск
+    MaxAttempts = 5,            -- Максимум попыток
+    Delay = 30,                 -- Задержка между попытками (сек)
+    CrashDetectionTime = 15,    -- Время для детектирования краша (сек)
+    CurrentAttempt = 0,
+    LastCrashTime = 0
+}
+
+-- Функция инициализации перезапуска
+local function InitiateReboot()
+    if not AUTO_REBOOT.Enabled then return end
+    if AUTO_REBOOT.CurrentAttempt >= AUTO_REBOOT.MaxAttempts then
+        Nexus:Log("Достигнут лимит перезапусков!")
+        return
+    end
+
+    AUTO_REBOOT.CurrentAttempt += 1
+    AUTO_REBOOT.LastCrashTime = os.time()
+
+    -- Отправка команды в Account Manager
+    Nexus:Send("RebootRequest", {
+        PlaceId = game.PlaceId,
+        JobId = game.JobId,
+        Attempt = AUTO_REBOOT.CurrentAttempt
+    })
+
+    -- Создание UI элементов
+    Nexus:CreateLabel("RebootStatus", 
+        string.format("Автоперезапуск через %d сек (Попытка %d/%d)", 
+        AUTO_REBOOT.Delay, 
+        AUTO_REBOOT.CurrentAttempt, 
+        AUTO_REBOOT.MaxAttempts),
+        {300, 40}, {5,5,5,5}
+    )
+
+    Nexus:CreateButton("CancelReboot", "Отменить перезапуск", {150, 30}, {5,5,5,5})
+    Nexus:OnButtonClick("CancelReboot", function()
+        AUTO_REBOOT.CurrentAttempt = 0
+        Nexus:Send("RemoveElement", {Name = "RebootStatus"})
+        Nexus:Send("RemoveElement", {Name = "CancelReboot"})
+    end)
+
+    -- Запланированный перезапуск
+    task.delay(AUTO_REBOOT.Delay, function()
+        if AUTO_REBOOT.CurrentAttempt > 0 then
+            game:Shutdown()
+        end
+    end)
+end
+
+-- Детектор крашей
+task.spawn(function()
+    while task.wait(AUTO_REBOOT.CrashDetectionTime) do
+        if AUTO_REBOOT.Enabled and os.time() - AUTO_REBOOT.LastCrashTime > AUTO_REBOOT.CrashDetectionTime then
+            local pingSuccess = pcall(function()
+                Nexus:Send("ping")
+            end)
+            
+            if not pingSuccess then
+                InitiateReboot()
+            end
+        end
+    end
+end)
+
+-- Хук на закрытие игры
+game:GetService("CoreGui").ChildRemoved:Connect(function(child)
+    if child.Name == "RobloxGui" then
+        InitiateReboot()
+    end
+end)
+
+-- Хук на ошибки телепортации
+TeleportService.TeleportInitFailed:Connect(function()
+    InitiateReboot()
+end)
+
+-- Интеграция с Account Manager через WebSocket
+Nexus:AddCommand("RebootRequest", function(payload)
+    local data = game:GetService("HttpService"):JSONDecode(payload)
+    
+    -- Логика для вашего Account Manager:
+    -- 1. Закрыть текущий экземпляр Roblox
+    -- 2. Перезапустить аккаунт с теми же параметрами
+    -- 3. Ввести задержку перед повторным подключением
+    
+    Nexus:Log("Инициирован перезапуск аккаунта...")
+    
+    -- Пример реализации:
+    task.delay(data.Delay or 30, function()
+        if not game:IsLoaded() then
+            game:Shutdown()
+        end
+    end)
+end)
