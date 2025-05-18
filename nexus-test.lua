@@ -1,17 +1,31 @@
+local MAX_RESTART_ATTEMPTS = 5 -- Максимальное количество попыток перезапуска
+local RESTART_DELAY = 15 -- Задержка между перезапусками в секундах
+
 if Nexus then Nexus:Stop() end
 
+-- Добавляем глобальную переменную для отслеживания перезапусков
+getgenv().RestartCounter = getgenv().RestartCounter or 0
+
+local function SafeShutdown()
+    if not getgenv().NoShutdown then
+        game:Shutdown()
+    end
+end
+
+-- Модифицированная проверка загрузки игры
 if not game:IsLoaded() then
     task.delay(60, function()
-        if NoShutdown then return end
+        if getgenv().NoShutdown then return end
 
         if not game:IsLoaded() then
-            return game:Shutdown()
+            getgenv().RestartCounter = getgenv().RestartCounter + 1
+            return SafeShutdown()
         end
 
         local Code = game:GetService'GuiService':GetErrorCode().Value
-
         if Code >= Enum.ConnectionError.DisconnectErrors.Value then
-            return game:Shutdown()
+            getgenv().RestartCounter = getgenv().RestartCounter + 1
+            return SafeShutdown()
         end
     end)
     
@@ -396,20 +410,59 @@ end
 
 do -- Connections
     GuiService.ErrorMessageChanged:Connect(function()
-        if NoShutdown then return end
+        if getgenv().NoShutdown then return end
 
         local Code = GuiService:GetErrorCode().Value
-
         if Code >= Enum.ConnectionError.DisconnectErrors.Value then
             if not Nexus.ShutdownOnTeleportError and Code > Enum.ConnectionError.PlacelaunchOtherError.Value then
                 return
             end
             
-            task.delay(Nexus.ShutdownTime, game.Shutdown, game)
+            getgenv().RestartCounter = getgenv().RestartCounter + 1
+            task.delay(Nexus.ShutdownTime, SafeShutdown)
         end
     end)
 end
 
+-- Новый функционал для автоматического перезапуска
+local function HandleRestart()
+    if getgenv().RestartCounter >= MAX_RESTART_ATTEMPTS then
+        Nexus:Log("Достигнуто максимальное количество попыток перезапуска!")
+        return
+    end
+
+    -- Отправляем команду в Account Manager через WebSocket
+    Nexus:Send("ScheduleRestart", {
+        Delay = RESTART_DELAY,
+        JobId = game.JobId,
+        PlaceId = game.PlaceId
+    })
+
+    -- Создаем кнопку для ручного перезапуска
+    Nexus:CreateButton("RestartButton", "Перезапустить сейчас", {200, 40}, {5,5,5,5})
+    Nexus:OnButtonClick("RestartButton", function()
+        getgenv().RestartCounter = 0
+        SafeShutdown()
+    end)
+end
+
+-- Автоматический перезапуск при критических ошибках
+game:GetService("CoreGui").ChildRemoved:Connect(function(child)
+    if child.Name == "RobloxGui" then
+        HandleRestart()
+    end
+end)
+
+-- Инициализация перезапуска
+task.spawn(function()
+    while true do
+        Nexus:WaitForMessage("RestartConfirmed")
+        HandleRestart()
+        task.wait(RESTART_DELAY)
+    end
+end)
+
+-- Остальная часть оригинального скрипта
 local GEnv = getgenv()
 GEnv.Nexus = Nexus
 GEnv.performance = Nexus.Commands.performance -- fix the sirmeme error so that people stop being annoying saying "omg performance() doesnt work" (https://youtu.be/vVfg9ym2MNs?t=389)
