@@ -409,14 +409,6 @@ do -- Connections
         end
     end)
 end
-
--- При входе в главное меню
-if isInMainMenu then
-    ws:Send("status " .. username .. " mainmenu")
-end
-
--- При входе в игру
-ws:Send("status " .. username .. " ingame")
                                 
 local GEnv = getgenv()
 GEnv.Nexus = Nexus
