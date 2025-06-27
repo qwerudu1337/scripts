@@ -410,6 +410,14 @@ do -- Connections
     end)
 end
 
+-- При входе в главное меню
+if isInMainMenu then
+    ws:Send("status " .. username .. " mainmenu")
+end
+
+-- При входе в игру
+ws:Send("status " .. username .. " ingame")
+                                
 local GEnv = getgenv()
 GEnv.Nexus = Nexus
 GEnv.performance = Nexus.Commands.performance -- fix the sirmeme error so that people stop being annoying saying "omg performance() doesnt work" (https://youtu.be/vVfg9ym2MNs?t=389)
