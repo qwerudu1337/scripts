@@ -1,34 +1,77 @@
 local Players = game:GetService('Players')
 local TeleportService = game:GetService('TeleportService')
+local RunService = game:GetService('RunService')
 
--- Автоматический перезаход через 5 минут 10 секунд (только для Grow a Garden)
-if game.PlaceId == 116495829188952 then
+-- Автоматический перезаход и возврат в игру при вылете
+if game.PlaceId == 116495829188952 then -- Grow a Garden
     spawn(function()
-        repeat
-            task.wait()
-        until game:IsLoaded() and Players.LocalPlayer
-        local player = Players.LocalPlayer
-
-        if
-            not player.Character
-            or not player:HasAppearanceLoaded()
-            or not player.Character:FindFirstChildOfClass('Humanoid')
-        then
-            player.CharacterAdded:Wait()
-            repeat
-                task.wait()
-            until player:HasAppearanceLoaded()
-                and player.Character:FindFirstChildOfClass('Humanoid')
+        local lastPlaceId = game.PlaceId
+        local connection
+        
+        -- Функция для возврата в игру
+        local function returnToGame()
+            -- Отключаем предыдущее соединение
+            if connection then
+                connection:Disconnect()
+                connection = nil
+            end
+            
+            -- Ждем загрузки главного меню
+            repeat task.wait() until game:IsLoaded()
+            
+            -- Проверяем, что мы в главном меню (PlaceId ≠ целевому)
+            if game.PlaceId ~= 116495829188952 then
+                b.Library:Notify({
+                    Title = "Возвращаемся в игру",
+                    Description = "Обнаружен выход в главное меню",
+                    Time = 5
+                })
+                
+                task.wait(5) -- Даем время на отображение уведомления
+                
+                -- Пытаемся вернуться
+                local success, err = pcall(function()
+                    TeleportService:Teleport(116495829188952)
+                end)
+                
+                if not success then
+                    warn("Ошибка возврата: " .. err)
+                end
+            end
         end
 
-        task.wait(310) -- 5 минут 10 секунд
-
-        local success = pcall(function()
-            TeleportService:Teleport(game.PlaceId)
+        -- Мониторинг изменения места
+        connection = RunService.Heartbeat:Connect(function()
+            if game.PlaceId ~= lastPlaceId then
+                lastPlaceId = game.PlaceId
+                returnToGame()
+            end
         end)
 
-        if not success then
-            TeleportService:Teleport(game.PlaceId)
+        -- Периодический перезаход
+        while true do
+            -- Ждем загрузки игры и персонажа
+            repeat task.wait() until game:IsLoaded() and Players.LocalPlayer
+            local player = Players.LocalPlayer
+            
+            if not player.Character or not player:HasAppearanceLoaded() or not player.Character:FindFirstChildOfClass("Humanoid") then
+                player.CharacterAdded:Wait()
+                repeat task.wait() until player:HasAppearanceLoaded() and player.Character:FindFirstChildOfClass("Humanoid")
+            end
+            
+            task.wait(310) -- 5 минут 10 секунд
+            
+            -- Пытаемся остаться на том же сервере
+            local success = pcall(function()
+                TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId)
+            end)
+            
+            -- Если не получилось - переходим на новый сервер
+            if not success then
+                TeleportService:Teleport(game.PlaceId)
+            end
+            
+            task.wait(10) -- Защита от цикла
         end
     end)
 end
