@@ -232,8 +232,6 @@ do -- Nexus
 
             local Success, Socket = pcall(WSConnect, ('ws://%s/Nexus?name=%s&id=%s&jobId=%s'):format(Host, LocalPlayer.Name, LocalPlayer.UserId, game.JobId))
 
-            local placeId = game.JobId
-
             if not Success then task.wait(12) continue end
 
             self.Socket = Socket
