@@ -18,6 +18,9 @@ if not game:IsLoaded() then
     game.Loaded:Wait()
 end
 
+local placeId = game.PlaceId
+ws:Connect("ws://localhost:PORT/Nexus?name="..username.."&id="..userId.."&jobId="..jobId.."&placeId="..placeId)
+
 local Nexus = {}
 local WSConnect = syn and syn.websocket.connect or
     (Krnl and (function() repeat task.wait() until Krnl.WebSocket and Krnl.WebSocket.connect return Krnl.WebSocket.connect end)()) or
@@ -413,9 +416,6 @@ end
 local GEnv = getgenv()
 GEnv.Nexus = Nexus
 GEnv.performance = Nexus.Commands.performance -- fix the sirmeme error so that people stop being annoying saying "omg performance() doesnt work" (https://youtu.be/vVfg9ym2MNs?t=389)
-
-local placeId = game.PlaceId
-ws:Connect("ws://localhost:PORT/Nexus?name="..username.."&id="..userId.."&jobId="..jobId.."&placeId="..placeId)
 
 if not Nexus_Version then
     Nexus:Connect()
