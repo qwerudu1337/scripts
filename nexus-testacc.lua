@@ -239,6 +239,15 @@ do -- Nexus
                 modeName = modeData.Name.Value
             end
 
+            local url = ('ws://%s/Nexus?name=%s&id=%s&jobId=%s&modeId=%s&modeName=%s'):format(
+                Host, 
+                LocalPlayer.Name, 
+                LocalPlayer.UserId, 
+                game.JobId,
+                modeId,
+                HttpService:UrlEncode(modeName)  -- Кодируем название
+            )
+
             local Success, Socket = pcall(WSConnect, ('ws://%s/Nexus?name=%s&id=%s&jobId=%s&modeId=%s&modeName=%s'):format(Host, LocalPlayer.Name, LocalPlayer.UserId, game.JobId, modeId, modeName))
 
             if not Success then task.wait(12) continue end
