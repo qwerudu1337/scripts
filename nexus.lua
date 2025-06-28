@@ -18,8 +18,6 @@ if not game:IsLoaded() then
     game.Loaded:Wait()
 end
 
-local placeId = game.PlaceId
-ws:Connect("ws://localhost:PORT/Nexus?name="..username.."&id="..userId.."&jobId="..jobId.."&placeId="..placeId)
 
 local Nexus = {}
 local WSConnect = syn and syn.websocket.connect or
@@ -233,6 +231,8 @@ do -- Nexus
             end
 
             local Success, Socket = pcall(WSConnect, ('ws://%s/Nexus?name=%s&id=%s&jobId=%s'):format(Host, LocalPlayer.Name, LocalPlayer.UserId, game.JobId))
+
+            local placeId = LocalPlayer.UserId
 
             if not Success then task.wait(12) continue end
 
