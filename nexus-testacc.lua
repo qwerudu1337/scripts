@@ -1,4 +1,3 @@
-
 if Nexus then Nexus:Stop() end
 
 if not game:IsLoaded() then
@@ -228,10 +227,19 @@ do -- Nexus
             if self.Terminated then break end
 
             if not Host then
-                Host = 'localhost:5243'
+                Host = 'localhost:5242'
             end
 
-            local Success, Socket = pcall(WSConnect, ('ws://%s/Nexus?name=%s&id=%s&jobId=%s'):format(Host, LocalPlayer.Name, LocalPlayer.UserId, game.JobId))
+            local modeId = "UNKNOWN"
+            local modeName = "UNKNOWN"
+
+            if game:GetService("ReplicatedFirst"):FindFirstChild("CurrentGameMode") then
+                local modeData = game:GetService("ReplicatedFirst").CurrentGameMode
+                modeId = tostring(modeData.Id.Value)
+                modeName = modeData.Name.Value
+            end
+
+            local Success, Socket = pcall(WSConnect, ('ws://%s/Nexus?name=%s&id=%s&jobId=%s&modeId=%s&modeName=%s'):format(Host, LocalPlayer.Name, LocalPlayer.UserId, game.JobId, modeId, modeName))
 
             if not Success then task.wait(12) continue end
 
