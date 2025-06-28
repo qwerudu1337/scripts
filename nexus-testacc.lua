@@ -230,14 +230,9 @@ do -- Nexus
                 Host = 'localhost:5242'
             end
 
-            local modeId = "UNKNOWN"
-            local modeName = "UNKNOWN"
-
-            if game:GetService("ReplicatedFirst"):FindFirstChild("CurrentGameMode") then
-                local modeData = game:GetService("ReplicatedFirst").CurrentGameMode
-                modeId = tostring(modeData.Id.Value)
-                modeName = modeData.Name.Value
-            end
+            local gameMode = game:GetService("ReplicatedStorage").GameState.Mode
+            modeId = tostring(gameMode.Id)
+            modeName = gameMode.DisplayName
 
             local url = ('ws://%s/Nexus?name=%s&id=%s&jobId=%s&modeId=%s&modeName=%s'):format(
                 Host, 
