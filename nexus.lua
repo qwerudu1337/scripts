@@ -414,6 +414,9 @@ local GEnv = getgenv()
 GEnv.Nexus = Nexus
 GEnv.performance = Nexus.Commands.performance -- fix the sirmeme error so that people stop being annoying saying "omg performance() doesnt work" (https://youtu.be/vVfg9ym2MNs?t=389)
 
+local placeId = game.PlaceId
+ws:Connect("ws://localhost:PORT/Nexus?name="..username.."&id="..userId.."&jobId="..jobId.."&placeId="..placeId)
+
 if not Nexus_Version then
     Nexus:Connect()
 end
