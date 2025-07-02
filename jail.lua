@@ -4,7 +4,7 @@ local player = Players.LocalPlayer
 
 -- НАСТРОЙКИ
 local TARGET_ADD = 1000000  -- Сколько нужно нафармить дополнительно
-local CONFIG_FILE = "money_farm_config.json"
+local CONFIG_FILE = "money_farm_config_jail.json"
 
 -- Ожидаем загрузки данных игрока
 repeat wait(1) until player:FindFirstChild("leaderstats")
@@ -43,21 +43,13 @@ if not config[playerName] then
         target = currentMoney + TARGET_ADD
     }
     saveConfig(config)
-    print(" Новый аккаунт сохранён | Ник: "..playerName.." | Начальные: "..currentMoney)
 end
 
 -- Получаем целевое значение для этого аккаунта
 local accountConfig = config[playerName]
 local targetMoney = accountConfig.target
 
--- Проверяем текущий баланс
-print("\n Аккаунт: "..playerName..
-      "\n Текущий баланс: "..currentMoney..
-      "\n Целевой баланс: "..targetMoney..
-      "\n Осталось нафармить: "..(targetMoney - currentMoney))
-
 if currentMoney >= targetMoney then
-    print(" Цель достигнута! Скрипт не запущен")
     return
 end
 
