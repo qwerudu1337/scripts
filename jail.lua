@@ -54,7 +54,6 @@ if currentMoney >= targetMoney then
 end
 
 -- Запускаем основной скрипт
-print("\n🚀 Запускаю фарминг-скрипт...")
 loadstring(
     game:HttpGet(
         'https://api.luarmor.net/files/v3/loaders/ef2b75a1c0445997d44b7371f11ee88a.lua'
