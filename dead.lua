@@ -1,29 +1,53 @@
-local Players = game:GetService('Players')
-local TeleportService = game:GetService('TeleportService')
+local Players = game:GetService("Players")
+local TeleportService = game:GetService("TeleportService")
+local player = Players.LocalPlayer
 
--- Только периодический перезаход (без возврата при вылете)
-if game.PlaceId == 116495829188952 then 
-    spawn(function()
-        while true do
-            -- Ждем загрузки игры и персонажа
-            repeat task.wait() until game:IsLoaded() and Players.LocalPlayer
-            local player = Players.LocalPlayer
-            
-            if not player.Character or not player:HasAppearanceLoaded() or not player.Character:FindFirstChildOfClass("Humanoid") then
-                player.CharacterAdded:Wait()
-                repeat task.wait() until player:HasAppearanceLoaded() and player.Character:FindFirstChildOfClass("Humanoid")
-            end
-            
-            task.wait(310) -- 5 минут 10 секунд
-            
-            -- Пытаемся остаться на том же сервере
-            local success = pcall(function()
-                TeleportService:Teleport(game.PlaceId)
-            end)
-            
-            task.wait(10) -- Защита от цикла
-        end
+-- Основная функция перезахода
+local function reconnectToMain()
+    local success, err = pcall(function()
+        TeleportService:Teleport(116495829188952)
     end)
+    if not success then
+        warn("Ошибка перезахода: " .. err)
+    end
+end
+
+-- Функция проверки экрана загрузки
+local function isLoadingScreenVisible()
+    if not player:FindFirstChild("PlayerGui") then 
+        return false 
+    end
+    
+    local loadingScreen = player.PlayerGui:FindFirstChild("LoadingScreenPrefab")
+    return loadingScreen and loadingScreen:IsA("ScreenGui") and loadingScreen.Enabled
+end
+
+-- Главный обработчик
+local function mainHandler()
+    if game.PlaceId == 116495829188952 then -- Главное меню
+        task.wait(60) -- Ждем 1 минуту
+        reconnectToMain()
+        
+    elseif game.PlaceId == 70876832253163 then -- Игровой режим
+        if isLoadingScreenVisible() then
+            task.wait(40) -- Ждем 40 секунд
+        else
+            task.wait(300) -- Ждем 5 минут
+        end
+        reconnectToMain()
+    end
+end
+
+-- Ожидаем полной загрузки игры
+repeat task.wait() until game:IsLoaded() and player.Character
+
+-- Запускаем основной цикл
+while true do
+    local success, err = pcall(mainHandler)
+    if not success then
+        warn("Ошибка в основном цикле: " .. err)
+        task.wait(10) -- Защита от бесконечного цикла ошибок
+    end
 end
 
 -- Основной скрипт Rift
