@@ -1,54 +1,9 @@
 local Players = game:GetService('Players')
 local TeleportService = game:GetService('TeleportService')
-local RunService = game:GetService('RunService')
 
--- Автоматический перезаход и возврат в игру при вылете
-if game.PlaceId == 116495829188952 then -- Grow a Garden
+-- Только периодический перезаход (без возврата при вылете)
+if game.PlaceId == 116495829188952 then 
     spawn(function()
-        local lastPlaceId = game.PlaceId
-        local connection
-        
-        -- Функция для возврата в игру
-        local function returnToGame()
-            -- Отключаем предыдущее соединение
-            if connection then
-                connection:Disconnect()
-                connection = nil
-            end
-            
-            -- Ждем загрузки главного меню
-            repeat task.wait() until game:IsLoaded()
-            
-            -- Проверяем, что мы в главном меню (PlaceId ≠ целевому)
-            if game.PlaceId ~= 116495829188952 then
-                b.Library:Notify({
-                    Title = "Возвращаемся в игру",
-                    Description = "Обнаружен выход в главное меню",
-                    Time = 5
-                })
-                
-                task.wait(5) -- Даем время на отображение уведомления
-                
-                -- Пытаемся вернуться
-                local success, err = pcall(function()
-                    TeleportService:Teleport(116495829188952)
-                end)
-                
-                if not success then
-                    warn("Ошибка возврата: " .. err)
-                end
-            end
-        end
-
-        -- Мониторинг изменения места
-        connection = RunService.Heartbeat:Connect(function()
-            if game.PlaceId ~= lastPlaceId then
-                lastPlaceId = game.PlaceId
-                returnToGame()
-            end
-        end)
-
-        -- Периодический перезаход
         while true do
             -- Ждем загрузки игры и персонажа
             repeat task.wait() until game:IsLoaded() and Players.LocalPlayer
@@ -63,13 +18,8 @@ if game.PlaceId == 116495829188952 then -- Grow a Garden
             
             -- Пытаемся остаться на том же сервере
             local success = pcall(function()
-                TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId)
-            end)
-            
-            -- Если не получилось - переходим на новый сервер
-            if not success then
                 TeleportService:Teleport(game.PlaceId)
-            end
+            end)
             
             task.wait(10) -- Защита от цикла
         end
