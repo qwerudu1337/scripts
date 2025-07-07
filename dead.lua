@@ -25,14 +25,14 @@ end
 -- Главный обработчик
 local function mainHandler()
     if game.PlaceId == 116495829188952 then -- Главное меню
-        task.wait(60) -- Ждем 1 минуту
+        task.wait(1) -- Ждем 1 минуту
         reconnectToMain()
         
     elseif game.PlaceId == 70876832253163 then -- Игровой режим
         if isLoadingScreenVisible() then
             task.wait(40) -- Ждем 40 секунд
         else
-            task.wait(300) -- Ждем 5 минут
+            task.wait(1) -- Ждем 5 минут
         end
         reconnectToMain()
     end
