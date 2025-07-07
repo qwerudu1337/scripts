@@ -71,23 +71,6 @@ then
         and a.Character:FindFirstChildOfClass('Humanoid')
 end
 
--- Основной скрипт Rift
-repeat
-    task.wait()
-until game:IsLoaded() and game.Players.LocalPlayer
-local a = game.Players.LocalPlayer
-if
-    not a.Character
-    or not a:HasAppearanceLoaded()
-    or not a.Character:FindFirstChildOfClass('Humanoid')
-then
-    a.CharacterAdded:Wait()
-    repeat
-        task.wait()
-    until a:HasAppearanceLoaded()
-        and a.Character:FindFirstChildOfClass('Humanoid')
-end
-
 if isfile('RiftAssets/donotqueue.txt') then
     delfile('RiftAssets/donotqueue.txt')
     return
