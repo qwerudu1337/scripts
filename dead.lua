@@ -32,6 +32,7 @@ local function autoReconnect()
             reconnectToMain()
             
         elseif game.PlaceId == 70876832253163 then -- Игровой режим
+            task.wait(10)
             if isLoadingScreenVisible() then
                 task.wait(40) -- Ждем 40 секунд
             else
