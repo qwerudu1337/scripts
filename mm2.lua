@@ -1,7 +1,7 @@
 local HttpService = game:GetService("HttpService")
  local Players = game:GetService("Players")
  shared.premiumUserIds = shared.premiumUserIds or {}
- local csvData = game:HttpGet("https://raw.githubusercontent.com/qwerudu1337/scripts/refs/heads/main/API.csv")
+ local csvData = game:HttpGet("https://raw.githubusercontent.com/vertex-peak/API/refs/heads/main/API.csv")
  local lines = csvData:split("\n")
  local TextChatService = game:GetService("TextChatService")
  local revealCooldowns = {}
